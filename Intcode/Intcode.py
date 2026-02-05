@@ -9,11 +9,13 @@ type Address = int
 type OpCode = int
 
 type Parameter = int
-type ParamterMode = int
-type Argument = tuple[Parameter, ParamterMode]
+type ParameterMode = int
+type Argument = tuple[Parameter, ParameterMode]
 
 
 class Computer:
+    __slots__ = ["memory", "pointer", "relative_base", "terminated", "input_values", "output_values"]
+
     # opcode: method,arity
     opcodes: dict[int, tuple[str, int]] = {
         1: ("add", 3),
@@ -75,7 +77,7 @@ class Computer:
             case _:
                 raise ValueError(f"Invalid parameter mode {mode}.")
 
-    def split(self, value: Value) -> tuple[OpCode, list[ParamterMode]]:
+    def split(self, value: Value) -> tuple[OpCode, list[ParameterMode]]:
         if value <= 99:
             return value, []
         else:
