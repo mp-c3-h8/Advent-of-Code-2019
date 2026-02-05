@@ -24,6 +24,7 @@ class Computer:
         6: ("jump_if_false", 2),
         7: ("less_than", 3),
         8: ("equal", 3),
+        9: ("relative_base_offset", 1),
         99: ("terminate", 0),
     }
 
@@ -83,7 +84,7 @@ class Computer:
             modes = list(map(int, reversed(val_str[:-2])))
             return opcode, modes
 
-    def set_input(self, value: Value) -> None:
+    def add_input(self, value: Value) -> None:
         self.input_values.append(value)
 
     def add(self, x: Argument, y: Argument, z: Argument) -> None:
@@ -130,6 +131,10 @@ class Computer:
         self[z] = 1 if cond else 0
         self.pointer += 4
 
+    def relative_base_offset(self, x: Argument) -> None:
+        self.relative_base += self.get_value(x)
+        self.pointer += 2
+
     def __getitem__(self, address: Address) -> Value:
         return self.memory[address]
 
@@ -137,7 +142,7 @@ class Computer:
         self.memory[address] = value
 
     def __str__(self) -> str:
-        return ",".join(str(x) for x in self.memory.values())
+        return ",".join(str(x) for x in self.output_values)
 
     def __iter__(self):
         return self
