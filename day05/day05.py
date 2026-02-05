@@ -14,11 +14,11 @@ with open(input_path) as f:
     data = f.read()
 
 program = list(map(int, data.split(",")))
-computer = Computer(program, 1)
+computer = Computer(program, [1])
 computer.run()
 print("Part 1:", computer.outputs[-1])
 
-computer.load(program, 5)
+computer.load(program, [5])
 computer.run()
 print("Part 2:", computer.outputs[-1])
 

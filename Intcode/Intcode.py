@@ -22,20 +22,18 @@ class Computer:
         99: 0,  # terminate
     }
 
-    def __init__(self, program: Program = [], input_value: int = 0) -> None:
-        self.load(program, input_value)
-        self.terminated: bool = False
-        self.input_value: int = input_value
+    def __init__(self, program: Program, input_values: list[int]) -> None:
+        self.load(program, input_values)
 
-    def load(self, program: Program, input_value: int = 0) -> None:
+    def load(self, program: Program, input_values: list[int] = []) -> None:
         self.memory = {i: x for i, x in enumerate(program)}
         self.size: int = len(self.memory)
         self.pointer: int = 0
         self.outputs: list[int] = []
         self.terminated: bool = False
-        self.input_value: int = input_value
+        self.input_values: list[int] = input_values
 
-    def run(self) -> None:
+    def run(self, loop: bool = False) -> None:
         while not self.terminated:
             opcode, modes = self.split(self[self.pointer])
             if opcode not in Computer.opcodes:
@@ -49,9 +47,11 @@ class Computer:
                 case 2:  # mul
                     self.mul(params[-1], *values[:2])
                 case 3:  # input
-                    self.input(params[-1], self.input_value)
+                    self.input(params[-1], self.input_values.pop(0))
                 case 4:  # output
                     self.output(*values)
+                    if loop:  # a bit hacky
+                        return
                 case 5:  # jump if true
                     self.jump(values[1], values[0] != 0)
                 case 6:  # jump if false
@@ -75,6 +75,9 @@ class Computer:
             opcode = int(val_str[-2:])
             modes = list(map(int, reversed(val_str[:-2])))
             return opcode, modes
+        
+    def add_input(self,value:Value) -> None:
+        self.input_values.append(value)
 
     def add(self, z: Address, x: Value, y: Value) -> None:
         self[z] = x + y
@@ -118,3 +121,11 @@ class Computer:
 
     def __str__(self) -> str:
         return ",".join(str(x) for x in self.memory.values())
+    
+    def __iter__(self):
+        return self
+    
+    def __next__(self) -> int|None:
+        self.run(True)
+        return self.outputs.pop() if self.outputs else None
+        
