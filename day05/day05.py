@@ -16,11 +16,11 @@ with open(input_path) as f:
 program = list(map(int, data.split(",")))
 computer = Computer(program, [1])
 computer.run()
-print("Part 1:", computer.outputs[-1])
+print("Part 1:", computer.output_values[-1])
 
 computer.load(program, [5])
 computer.run()
-print("Part 2:", computer.outputs[-1])
+print("Part 2:", computer.output_values[-1])
 
 e = timer()
 print(f"time: {e-s}")

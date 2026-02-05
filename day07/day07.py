@@ -14,7 +14,7 @@ def sim(program: list[int], phase_setting: tuple[int, ...]) -> int:
     for phase in phase_setting:
         computer.load(program, [phase, inp])
         computer.run()
-        inp = computer.outputs[-1]
+        inp = computer.output_values[-1]
     return inp
 
 
@@ -29,7 +29,7 @@ def feedback(program: list[int], phase_setting: tuple[int, ...]) -> int:
     output = 0
     while inp is not None:
         for computer in computers:
-            computer.add_input(inp)
+            computer.set_input(inp)
             inp = next(computer)
             if inp == None:
                 break

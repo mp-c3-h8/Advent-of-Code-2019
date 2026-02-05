@@ -1,11 +1,16 @@
 from itertools import zip_longest
-
+from collections import defaultdict
 
 type Program = list[int]
+type Memory = defaultdict[int, int]
+
 type Value = int
 type Address = int
 type OpCode = int
-type Modes = list[int]
+
+type Parameter = int
+type ParamterMode = int
+type Argument = tuple[Parameter, ParamterMode]
 
 
 class Computer:
@@ -26,48 +31,71 @@ class Computer:
         self.load(program, input_values)
 
     def load(self, program: Program, input_values: list[int] = []) -> None:
-        self.memory = {i: x for i, x in enumerate(program)}
-        self.size: int = len(self.memory)
+        self.memory: Memory = defaultdict(int, {i: x for i, x in enumerate(program)})
         self.pointer: int = 0
-        self.outputs: list[int] = []
+        self.relative_base: int = 0
         self.terminated: bool = False
         self.input_values: list[int] = input_values
+        self.output_values: list[int] = []
 
     def run(self, loop: bool = False) -> None:
         while not self.terminated:
             opcode, modes = self.split(self[self.pointer])
-            if opcode not in Computer.opcodes:
-                raise ValueError(f"Opcode {opcode} unknown.")
             arity = Computer.opcodes[opcode]
-            params = [self[i] for i in range(self.pointer+1, self.pointer+arity+1)]
-            values = [self[p] if mode == 0 else p for p, mode in zip_longest(params, modes, fillvalue=0)]
-            match opcode:
-                case 1:  # add
-                    self.add(params[-1], *values[:2])
-                case 2:  # mul
-                    self.mul(params[-1], *values[:2])
-                case 3:  # input
-                    self.input(params[-1], self.input_values.pop(0))
-                case 4:  # output
-                    self.output(*values)
-                    if loop:  # a bit hacky
-                        return
-                case 5:  # jump if true
-                    self.jump(values[1], values[0] != 0)
-                case 6:  # jump if false
-                    self.jump(values[1], values[0] == 0)
-                case 7:  # less than
-                    self.set_to_one(params[-1], values[0] < values[1])
-                case 8:  # equal
-                    self.set_to_one(params[-1], values[0] == values[1])
-                case 99:  # terminate
-                    self.terminate()
-                case _:  # unknown
-                    raise ValueError(f"Opcode {opcode} not implemented.")
-            if self.pointer >= self.size:
-                self.terminate()
+            params: list[Parameter] = [self[i] for i in range(self.pointer+1, self.pointer+arity+1)]
+            arguments: list[Argument] = list(zip_longest(params, modes, fillvalue=0))
+            # values = [self[p] if mode == 0 else p for p, mode in zip_longest(params, modes, fillvalue=0)]
+            self.execute(opcode, arguments)
+            if opcode == 4 and loop:  # a bit hacky
+                return
 
-    def split(self, value: Value) -> tuple[OpCode, Modes]:
+    def execute(self, opcode: OpCode, arguments: list[Argument]) -> None:
+        match opcode:
+            case 1:  # add
+                self.add(*arguments)
+            case 2:  # mul
+                self.mul(*arguments)
+            case 3:  # input
+                self.input(*arguments)
+            case 4:  # output
+                self.output(*arguments)
+            case 5:  # jump if true
+                self.jump_if_true(*arguments)
+            case 6:  # jump if false
+                self.jump_if_false(*arguments)
+            case 7:  # less than
+                self.less_than(*arguments)
+            case 8:  # equal
+                self.equal(*arguments)
+            case 99:  # terminate
+                self.terminate()
+            case _:  # unknown
+                raise ValueError(f"Opcode {opcode} not implemented.")
+
+    def get_address(self, argument: Argument) -> Address:
+        # Parameters that an instruction writes to will never be in immediate mode.
+        parameter, mode = argument
+        match mode:
+            case 0:  # position mode
+                return parameter
+            case 2:  # relative mode
+                return self.relative_base + parameter
+            case _:
+                raise ValueError(f"Invalid parameter mode {mode}.")
+
+    def get_value(self, argument: Argument) -> Value:
+        parameter, mode = argument
+        match mode:
+            case 0:  # position mode
+                return self[parameter]
+            case 1:  # immediate mode
+                return parameter
+            case 2:  # relative mode
+                return self[self.relative_base + parameter]
+            case _:
+                raise ValueError(f"Invalid parameter mode {mode}.")
+
+    def split(self, value: Value) -> tuple[OpCode, list[ParamterMode]]:
         if value <= 99:
             return value, []
         else:
@@ -75,57 +103,66 @@ class Computer:
             opcode = int(val_str[-2:])
             modes = list(map(int, reversed(val_str[:-2])))
             return opcode, modes
-        
-    def add_input(self,value:Value) -> None:
+
+    def set_input(self, value: Value) -> None:
         self.input_values.append(value)
 
-    def add(self, z: Address, x: Value, y: Value) -> None:
-        self[z] = x + y
+    def add(self, x: Argument, y: Argument, z: Argument) -> None:
+        self[self.get_address(z)] = self.get_value(x) + self.get_value(y)
         self.pointer += 4
 
-    def mul(self, z: Address, x: Value, y: Value) -> None:
-        self[z] = x * y
+    def mul(self, x: Argument, y: Argument, z: Argument) -> None:
+        self[self.get_address(z)] = self.get_value(x) * self.get_value(y)
         self.pointer += 4
 
-    def input(self, z: Address, x: Value) -> None:
-        self[z] = x
+    def input(self, z: Argument) -> None:
+        if len(self.input_values) == 0:
+            raise ValueError("No value provided for input instruction")
+        self[self.get_address(z)] = self.input_values.pop(0)
         self.pointer += 2
 
-    def output(self, x: Value) -> None:
-        self.outputs.append(x)
+    def output(self, x: Argument) -> None:
+        self.output_values.append(self.get_value(x))
         self.pointer += 2
 
     def terminate(self) -> None:
         self.terminated = True
         self.pointer += 1
 
-    def jump(self, x: Value, cond: bool) -> None:
+    def jump_if_true(self, x: Argument, y: Argument) -> None:
+        self.jump(self.get_value(x) != 0, self.get_value(y))
+
+    def jump_if_false(self, x: Argument, y: Argument) -> None:
+        self.jump(self.get_value(x) == 0, self.get_value(y))
+
+    def jump(self, cond: bool, x: Value) -> None:
         if cond:
             self.pointer = x
         else:
             self.pointer += 3
 
-    def set_to_one(self, z: Address, cond: bool) -> None:
+    def less_than(self, x: Argument, y: Argument, z: Argument) -> None:
+        self.set_to_one(self.get_value(x) < self.get_value(y), self.get_address(z))
+
+    def equal(self, x: Argument, y: Argument, z: Argument) -> None:
+        self.set_to_one(self.get_value(x) == self.get_value(y), self.get_address(z))
+
+    def set_to_one(self, cond: bool, z: Address) -> None:
         self[z] = 1 if cond else 0
         self.pointer += 4
 
     def __getitem__(self, address: Address) -> Value:
-        if address >= self.size:
-            raise ValueError(f"Memory address {address} invalid for memory of size {self.size}.")
         return self.memory[address]
 
     def __setitem__(self, address: Address, value: Value) -> None:
-        if address >= self.size:
-            raise ValueError(f"Memory address {address} invalid for memory of size {self.size}.")
         self.memory[address] = value
 
     def __str__(self) -> str:
         return ",".join(str(x) for x in self.memory.values())
-    
+
     def __iter__(self):
         return self
-    
-    def __next__(self) -> int|None:
+
+    def __next__(self) -> int | None:
         self.run(True)
-        return self.outputs.pop() if self.outputs else None
-        
+        return self.output_values.pop() if self.output_values else None
