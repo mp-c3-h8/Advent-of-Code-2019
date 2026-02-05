@@ -14,17 +14,17 @@ type Argument = tuple[Parameter, ParamterMode]
 
 
 class Computer:
-    # opcode: arity
-    opcodes: dict[int, int] = {
-        1: 3,  # add
-        2: 3,  # mul
-        3: 1,  # input
-        4: 1,  # output
-        5: 2,  # jump if true
-        6: 2,  # jump if false
-        7: 3,  # less than
-        8: 3,  # equal
-        99: 0,  # terminate
+    # opcode: method,arity
+    opcodes: dict[int, tuple[str, int]] = {
+        1: ("add", 3),
+        2: ("mul", 3),
+        3: ("input", 1),
+        4: ("output", 1),
+        5: ("jump_if_true", 2),
+        6: ("jump_if_false", 2),
+        7: ("less_than", 3),
+        8: ("equal", 3),
+        99: ("terminate", 0),
     }
 
     def __init__(self, program: Program, input_values: list[int]) -> None:
@@ -41,36 +41,15 @@ class Computer:
     def run(self, loop: bool = False) -> None:
         while not self.terminated:
             opcode, modes = self.split(self[self.pointer])
-            arity = Computer.opcodes[opcode]
+            if opcode not in Computer.opcodes:
+                raise ValueError(f"Invalid opcode {opcode}")
+            method, arity = Computer.opcodes[opcode]
             params: list[Parameter] = [self[i] for i in range(self.pointer+1, self.pointer+arity+1)]
             arguments: list[Argument] = list(zip_longest(params, modes, fillvalue=0))
-            # values = [self[p] if mode == 0 else p for p, mode in zip_longest(params, modes, fillvalue=0)]
-            self.execute(opcode, arguments)
+            execute = getattr(self, method)
+            execute(*arguments)
             if opcode == 4 and loop:  # a bit hacky
                 return
-
-    def execute(self, opcode: OpCode, arguments: list[Argument]) -> None:
-        match opcode:
-            case 1:  # add
-                self.add(*arguments)
-            case 2:  # mul
-                self.mul(*arguments)
-            case 3:  # input
-                self.input(*arguments)
-            case 4:  # output
-                self.output(*arguments)
-            case 5:  # jump if true
-                self.jump_if_true(*arguments)
-            case 6:  # jump if false
-                self.jump_if_false(*arguments)
-            case 7:  # less than
-                self.less_than(*arguments)
-            case 8:  # equal
-                self.equal(*arguments)
-            case 99:  # terminate
-                self.terminate()
-            case _:  # unknown
-                raise ValueError(f"Opcode {opcode} not implemented.")
 
     def get_address(self, argument: Argument) -> Address:
         # Parameters that an instruction writes to will never be in immediate mode.
