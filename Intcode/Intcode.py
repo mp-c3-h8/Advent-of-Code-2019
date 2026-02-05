@@ -54,6 +54,8 @@ class Computer:
             if opcode == 4 and loop:  # a bit hacky
                 return
 
+    # we cant have a "real pointer" for elements in our memory dict
+    # solution: split write and read operations into two functions: get_address and get_value
     def get_address(self, argument: Argument) -> Address:
         # Parameters that an instruction writes to will never be in immediate mode.
         parameter, mode = argument
