@@ -48,21 +48,14 @@ def paint_hull(program: list[int], start_color: int) -> tuple[int, set[Pos]]:
     return len(visited), white_panels
 
 
-def plot_hull(white_panels: set[Pos]) -> None:
-    import numpy as np
-    import matplotlib.pyplot as plt
-
+def print_hull(white_panels: set[Pos]) -> None:
     panels = [(int(z.imag), int(z.real)) for z in white_panels]
     y_max, x_max = map(max, *panels)
     y_min, x_min = map(min, *panels)
-    dimy, dimx = y_max-y_min+1, x_max-x_min+1
-
-    X = np.zeros((dimy, dimx))
-
-    for y, x in panels:
-        X[y - y_min, x - x_min] = 1
-    plt.imshow(X)
-    plt.show()
+    for y in range(y_min, y_max+1):
+        for x in range(x_min, x_max+1):
+            print("█" if x+y*1j in white_panels else " ", end="")
+        print()
 
 
 s = timer()
@@ -76,11 +69,11 @@ program = list(map(int, data.split(",")))
 
 num_visited, white_panels = paint_hull(program, 0)
 print("Part 1:", num_visited)
+
 num_visited, white_panels = paint_hull(program, 1)
-print("Part 2: (see plot)")
+print("Part 2:")
+print_hull(white_panels)
 
 
 e = timer()
 print(f"time: {e-s}")
-
-plot_hull(white_panels)
