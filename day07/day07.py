@@ -30,8 +30,10 @@ def feedback(program: list[int], phase_setting: tuple[int, ...]) -> int:
     while inp is not None:
         for computer in computers:
             computer.add_input(inp)
-            inp = next(computer)
-            if inp == None:
+            try:
+                inp = next(computer)
+            except StopIteration:
+                inp = None
                 break
             output = inp
     return output

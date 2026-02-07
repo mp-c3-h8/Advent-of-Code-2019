@@ -22,8 +22,9 @@ def paint_hull(program: list[int], start_color: int) -> tuple[int, set[Pos]]:
 
     for _ in range(10**6):
         computer.add_input(curr_color)
-        to_paint = next(computer)
-        if computer.terminated:
+        try:
+            to_paint = next(computer)
+        except StopIteration:
             break
         if to_paint == 0:  # black
             white_panels -= {pos}
@@ -32,7 +33,10 @@ def paint_hull(program: list[int], start_color: int) -> tuple[int, set[Pos]]:
         else:
             raise ValueError(f"Colorcode {to_paint} unknown.")
 
-        turn = next(computer)
+        try:
+            turn = next(computer)
+        except StopIteration:
+            break
         if turn == 0:  # left 90 degrees
             d *= -1j
         elif turn == 1:  # right 90 degrees

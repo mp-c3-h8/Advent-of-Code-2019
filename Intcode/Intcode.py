@@ -1,5 +1,6 @@
 from itertools import zip_longest
 from collections import defaultdict
+from typing import Iterator
 
 type Program = list[int]
 type Memory = defaultdict[int, int]
@@ -14,7 +15,7 @@ type Argument = tuple[Parameter, ParameterMode]
 
 
 class Computer:
-    __slots__ = ["memory", "pointer", "relative_base", "terminated", "input_values", "output_values"]
+    __slots__ = ["memory", "pointer", "relative_base", "terminated", "input_values", "output_values", "input_default"]
 
     # opcode: method,arity
     opcodes: dict[int, tuple[str, int]] = {
@@ -39,6 +40,7 @@ class Computer:
         self.relative_base: int = 0
         self.terminated: bool = False
         self.input_values: list[int] = input_values
+        self.input_default: int | None = None
         self.output_values: list[int] = []
 
     def run(self, loop: bool = False) -> None:
@@ -100,10 +102,14 @@ class Computer:
         self.pointer += 4
 
     def input(self, z: Argument) -> None:
-        if len(self.input_values) == 0:
+        if len(self.input_values) > 0:
+            self[self.get_address(z)] = self.input_values.pop(0)
+            self.pointer += 2
+        elif self.input_default is not None:
+            self[self.get_address(z)] = self.input_default
+            self.pointer += 2
+        else:
             raise ValueError("No value provided for input instruction")
-        self[self.get_address(z)] = self.input_values.pop(0)
-        self.pointer += 2
 
     def output(self, x: Argument) -> None:
         self.output_values.append(self.get_value(x))
@@ -151,6 +157,9 @@ class Computer:
     def __iter__(self):
         return self
 
-    def __next__(self) -> int | None:
+    def __next__(self) -> int:
         self.run(True)
-        return self.output_values.pop() if self.output_values else None
+        if not self.terminated:
+            return self.output_values.pop()
+        else:
+            raise StopIteration
