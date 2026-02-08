@@ -26,17 +26,13 @@ def max_thrusters(program: list[int]) -> int:
 def feedback(program: list[int], phase_setting: tuple[int, ...]) -> int:
     computers: list[Computer] = [Computer(program, [phase]) for phase in phase_setting]
     inp = 0
-    output = 0
-    while inp is not None:
-        for computer in computers:
-            computer.add_input(inp)
-            try:
+    try:
+        while True:
+            for computer in computers:
+                computer.add_input(inp)
                 inp = next(computer)
-            except StopIteration:
-                inp = None
-                break
-            output = inp
-    return output
+    except StopIteration:
+        return inp
 
 
 def max_feedback(program: list[int]) -> int:

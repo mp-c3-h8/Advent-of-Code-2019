@@ -39,7 +39,7 @@ class Computer:
         self.pointer: int = 0
         self.relative_base: int = 0
         self.terminated: bool = False
-        self.input_values: list[int] = input_values
+        self.input_values: list[int] = input_values[:]
         self.input_default: int | None = None
         self.output_values: list[int] = []
 
