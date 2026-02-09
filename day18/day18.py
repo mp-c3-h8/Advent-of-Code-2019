@@ -10,7 +10,7 @@ type EntityMap = dict[Entity, Pos]
 type Grid = dict[Pos, str]
 type Graph = defaultdict[Entity, list[Entity]]
 type Edges = dict[tuple[Entity, Entity], int]  # edge weights
-type State = tuple[Entity, tuple[str, ...]]  # (node,(collected_keys))
+type State = tuple[Entity, str]  # (node,(collected_keys))
 
 
 def init_data(data: str) -> tuple[Grid, EntityMap]:
@@ -54,7 +54,7 @@ def collect_all_keys(graph: Graph, edges: Edges, entity_map: EntityMap) -> int:
 
     # state = (node,(collected_keys))
     # collected_keys must be sorted
-    init = (0, 0, ("@", ()))  # (prio,steps,state)
+    init = (0, 0, ("@", ""))  # (prio,steps,state)
     q: list[tuple[int, int, State]] = [init]
     heapify(q)
     seen: dict[State, int] = {}  # (node,tuple(collected_keys)): steps
@@ -70,19 +70,20 @@ def collect_all_keys(graph: Graph, edges: Edges, entity_map: EntityMap) -> int:
             continue
         seen[state] = steps
 
-        keys_set = set(keys)
+        
         for new_node in graph[node]:
             add_steps = edges[(node, new_node)]
             new_steps = steps + add_steps
             if new_node.islower():  # key
-                if new_node in keys_set:
+                if new_node in keys:
                     heappush(q, (prio + add_steps, new_steps, (new_node, keys)))
                 else:
-                    new_keys = tuple(sorted(keys_set | {new_node}))
+                    new_keys = ''.join(sorted(keys+new_node))
+                    #print(new_keys)
                     new_prio = new_steps + (num_keys-len(new_keys))
                     heappush(q, (new_prio, new_steps, (new_node, new_keys)))
             elif new_node.isupper():  # door
-                if new_node.lower() in keys_set:  # we have a key!
+                if new_node.lower() in keys:  # we have a key!
                     heappush(q, (prio + add_steps, new_steps, (new_node, keys)))
             else:  # start position
                 heappush(q, (prio + add_steps, new_steps, (new_node, keys)))
@@ -102,6 +103,11 @@ grid, entity_map = init_data(data)
 graph, edges = create_graph(grid, entity_map)
 steps = collect_all_keys(graph, edges, entity_map)
 print("Part 1:", steps)
+
+t = frozenset(["a","b"])
+tt = {t:1}
+a = frozenset(["b","a"])
+print(a in tt)
 
 e = timer()
 print(f"time: {e-s}")
