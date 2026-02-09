@@ -19,6 +19,8 @@ def init_data(data: str) -> tuple[Grid, EntityMap]:
     return grid, entity_map
 
 
+# create a graph from the grid
+# gets rid of the corridors and saves their lenghts as weights
 def create_graph(grid: Grid, entity_map: EntityMap) -> tuple[Graph, Edges]:
     DIRS = ((1, 0), (-1, 0), (0, 1), (0, -1))
     graph: Graph = defaultdict(list)
@@ -54,39 +56,57 @@ def collect_all_keys(graph: Graph, edges: Edges, entity_map: EntityMap) -> int:
 
     # state = (node,(collected_keys))
     # collected_keys must be sorted
-    init = (0, 0, ("@", ""))  # (prio,steps,state)
-    q: list[tuple[int, int, State]] = [init]
+    init = (0, 0, "@", "", ("@", ""))  # (prio,steps,last_node,last_key,state)
+    q: list[tuple[int, int, Entity, Entity, State]] = [init]
     heapify(q)
-    seen: dict[State, int] = {}  # (node,tuple(collected_keys)): steps
+    seen: dict[State, int] = {}  # state: steps
 
+    i = 0
+    k = 0
     while q:
-        prio, steps, state = heappop(q)
+        prio, steps, last_node, last_key, state = heappop(q)
         node, keys = state
-
+        i += 1
         if len(keys) == num_keys:
+            print(f"i={i}, k={k}, seen= {len(seen)}")
             return steps
 
-        if state in seen and seen[state] <= steps:
+        if state in seen and seen[state] < steps:
             continue
-        seen[state] = steps
 
-        
+        k += 1
         for new_node in graph[node]:
-            add_steps = edges[(node, new_node)]
-            new_steps = steps + add_steps
+            # dont backtrack unless we just picked up a new key
+            if new_node == last_node and last_key != node:
+                continue
+            new_steps = steps + edges[(node, new_node)]
             if new_node.islower():  # key
                 if new_node in keys:
-                    heappush(q, (prio + add_steps, new_steps, (new_node, keys)))
+                    new_prio = new_steps + (num_keys-len(keys))
+                    if (new_node, keys) in seen and seen[(new_node, keys)] <= new_steps:
+                        continue
+                    seen[(new_node, keys)] = new_steps
+                    heappush(q, (new_prio, new_steps, node, last_key, (new_node, keys)))
                 else:
                     new_keys = ''.join(sorted(keys+new_node))
-                    #print(new_keys)
                     new_prio = new_steps + (num_keys-len(new_keys))
-                    heappush(q, (new_prio, new_steps, (new_node, new_keys)))
+                    if (new_node, new_keys) in seen and seen[(new_node, new_keys)] <= new_steps:
+                        continue
+                    seen[(new_node, new_keys)] = new_steps
+                    heappush(q, (new_prio, new_steps, node, new_node, (new_node, new_keys)))
             elif new_node.isupper():  # door
                 if new_node.lower() in keys:  # we have a key!
-                    heappush(q, (prio + add_steps, new_steps, (new_node, keys)))
+                    new_prio = new_steps + (num_keys-len(keys))
+                    if (new_node, keys) in seen and seen[(new_node, keys)] <= new_steps:
+                        continue
+                    seen[(new_node, keys)] = new_steps
+                    heappush(q, (new_prio, new_steps, node, last_key, (new_node, keys)))
             else:  # start position
-                heappush(q, (prio + add_steps, new_steps, (new_node, keys)))
+                new_prio = new_steps + (num_keys-len(keys))
+                if (new_node, keys) in seen and seen[(new_node, keys)] <= new_steps:
+                    continue
+                seen[(new_node, keys)] = new_steps
+                heappush(q, (new_prio, new_steps, node, last_key, (new_node, keys)))
     print(seen)
 
     return 0
@@ -104,10 +124,6 @@ graph, edges = create_graph(grid, entity_map)
 steps = collect_all_keys(graph, edges, entity_map)
 print("Part 1:", steps)
 
-t = frozenset(["a","b"])
-tt = {t:1}
-a = frozenset(["b","a"])
-print(a in tt)
 
 e = timer()
 print(f"time: {e-s}")
