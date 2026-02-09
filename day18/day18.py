@@ -134,6 +134,7 @@ def part2(data: str, pos_player: Pos, num_keys: int) -> int:
     while q:
         prio, steps, state = heappop(q)
         j += 1
+        # print(state)
 
         all_keys = "".join(keys for node, keys in state)
         if len(all_keys) == num_keys:
@@ -163,15 +164,51 @@ def part2(data: str, pos_player: Pos, num_keys: int) -> int:
                     new_keys = keys
 
                 if new_keys is not None:
-                    new_steps = steps + graphs_edges[i][1][(node, new_node)]
-                    new_prio = new_steps  #+ (num_keys-len(all_keys))*80
-                    new_state = state[:i] + ((new_node, new_keys), ) + state[i+1:]
+                    add_step = graphs_edges[i][1][(node, new_node)]
+                    new_steps = steps + add_step
+                    new_prio = new_steps  # + (num_keys-len(all_keys))
+                    new_state = state[:i] + ((new_node, new_keys),) + state[i+1:]
+
                     if new_state in seen and seen[new_state] <= new_steps:
                         continue
                     seen[new_state] = new_steps
                     heappush(q, (new_prio, new_steps, new_state))
     else:
         raise ValueError("Could not find all keys :(")
+
+
+def search_keys(graph: Graph, edges: Edges, keys: str, start: Entity) -> list[tuple[Entity, int]]:
+
+    init = (0, start)  # (steps=prio,node)
+    q: list[tuple[int, Entity]] = [init]
+    heapify(q)
+    seen: dict[Entity, int] = {}  # node: steps
+    new_keys = set()
+    collected_keys = set(keys)
+
+    while q:
+        steps, node = heappop(q)
+
+        if node.islower() and node not in collected_keys:
+            new_keys.add(node)
+            continue
+
+        if node in seen and seen[node] < steps:
+            continue
+
+        for new_node in graph[node]:
+            # cant open the door
+            if new_node.isupper() and new_node.lower() not in collected_keys:
+                continue
+
+            new_steps = steps + edges[(node, new_node)]
+
+            if new_node in seen and seen[new_node] < new_steps:
+                continue
+
+            heappush(q, (new_steps, new_node))
+
+    return [(key, seen[key]) for key in new_keys]
 
 
 s = timer()
