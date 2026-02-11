@@ -1,7 +1,7 @@
-from collections import deque
+from collections import deque, defaultdict
 
 type Program = list[int]
-type Memory = list[int]
+type Memory = defaultdict[int, int]
 
 type Value = int
 type Address = int
@@ -29,7 +29,7 @@ class Computer:
         self.load(program, input_values)
 
     def load(self, program: Program, input_values: list[int] = []) -> None:
-        self.mem: Memory = program[:] + [0]*5000
+        self.mem: Memory = defaultdict(int, ((i, p) for i, p in enumerate(program)))
         self.pointer: int = 0
         self.relative_base: int = 0
         self.terminated: bool = False
