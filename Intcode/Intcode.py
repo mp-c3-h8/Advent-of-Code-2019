@@ -9,7 +9,8 @@ type OpCode = int
 
 
 class Computer:
-    __slots__ = ["mem", "pointer", "relative_base", "terminated", "input_values", "output_values", "input_default"]
+    __slots__ = ["mem", "pointer", "relative_base", "terminated",
+                 "input_values", "output_values", "input_default", "lan"]
 
     # opcode: arity
     opcodes: list = [
@@ -28,16 +29,18 @@ class Computer:
     def __init__(self, program: Program, input_values: list[int]) -> None:
         self.load(program, input_values)
 
-    def load(self, program: Program, input_values: list[int] = []) -> None:
+    def load(self, program: Program, input_values: list[int]) -> None:
         self.mem: Memory = defaultdict(int, ((i, p) for i, p in enumerate(program)))
         self.pointer: int = 0
         self.relative_base: int = 0
         self.terminated: bool = False
         self.input_values: deque[int] = deque(input_values)
-        self.input_default: int | None = None
         self.output_values: list[int] = []
+        self.input_default: int | None = None
+        self.lan: list[Computer] | None = None
 
     def run(self, loop: bool = False) -> None:
+        temp: list[int] = []
         while not self.terminated:
             op = self.mem[self.pointer]
             opcode = op % 100
@@ -56,8 +59,20 @@ class Computer:
             elif opcode == 3:  # input
                 self.input(addrs[0])
             elif opcode == 4:  # output
-                self.output_values.append(vals[0])
-                self.pointer += 2
+                if self.lan is not None:
+                    temp.append(vals[0])
+                    if len(temp) == 3:
+                        print(temp)
+                        if temp[0] == 255:
+                            print(temp)
+                            for comp in self.lan:
+                                comp.terminated = True
+                        self.lan[temp[0]].input_values.extend(temp[1:])
+                        temp = []
+                    self.pointer += 2
+                else:
+                    self.output_values.append(vals[0])
+                    self.pointer += 2
                 if loop:  # a bit hacky
                     return
             elif opcode == 5:  # jump if true
@@ -75,6 +90,10 @@ class Computer:
                 self.pointer += 2
             else:
                 raise ValueError(f"Opcode {opcode} unknown.")
+
+    # def receive(self, vals: list[int]) -> None:
+    #     with self._lock:
+    #         self.input_values.extend(vals)
 
     def process_code(self, op: int, arity: int) -> tuple[list[int], list[int]]:
         addrs = []
