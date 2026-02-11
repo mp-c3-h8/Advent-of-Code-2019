@@ -36,20 +36,9 @@ def border() -> Iterator[Pos]:
 
 def part2(program: list[int], w: int) -> int:
     computer = Computer(program, [])
-
-    bottom_xy: dict[int, int] = {}
-    bottom_yx: dict[int, int] = {}
-    top_x, top_y = 0, 0
     bottom_x, bottom_y = 0, 0
     try:
         for _ in range(10**6):
-            # top border of the beam
-            for dx, dy in border():  # dy and dx switched!
-                computer.load(program, [top_x + dx, top_y + dy])
-                if next(computer) == 1:
-                    top_y += dy
-                    top_x += dx
-                    break
 
             # bottom border of the beam
             for dy, dx in border():
@@ -57,26 +46,18 @@ def part2(program: list[int], w: int) -> int:
                 if next(computer) == 1:
                     bottom_y += dy
                     bottom_x += dx
-                    bottom_xy[bottom_x] = bottom_y
-                    if bottom_y in bottom_yx:
-                        pass
-                    else:
-                        bottom_yx[bottom_y] = bottom_x
                     break
 
-            if top_x <= int(w*1.5):
+            if bottom_y <= int(w*1.5):
                 continue
-            if top_x - bottom_yx[top_y] < w-1:
-                continue
-            check_x = top_x-(w-1)
-            if bottom_xy[check_x] - top_y < w-1:
-                continue
-
-            # found
-            return check_x * 10_000 + top_y
+            top_y = bottom_y-(w-1)
+            top_x = bottom_x+(w-1)
+            computer.load(program, [top_x, top_y])
+            if next(computer) == 1:
+                # found
+                return bottom_x * 10_000 + top_y
         else:
             raise ValueError("Max iterations reached.")
-
     except StopIteration:
         raise ValueError("Program error.")
 
