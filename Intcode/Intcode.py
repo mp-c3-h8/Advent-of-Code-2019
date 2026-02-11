@@ -15,7 +15,7 @@ type Argument = tuple[Parameter, ParameterMode]
 
 
 class Computer:
-    __slots__ = ["memory", "pointer", "relative_base", "terminated", "input_values", "output_values", "input_default"]
+    __slots__ = ["mem", "pointer", "relative_base", "terminated", "input_values", "output_values", "input_default"]
 
     # opcode: method,arity
     opcodes: dict[int, tuple[str, int]] = {
@@ -35,7 +35,7 @@ class Computer:
         self.load(program, input_values)
 
     def load(self, program: Program, input_values: list[int] = []) -> None:
-        self.memory: Memory = defaultdict(int, {i: x for i, x in enumerate(program)})
+        self.mem = program[:] + [0]*1000
         self.pointer: int = 0
         self.relative_base: int = 0
         self.terminated: bool = False
@@ -45,11 +45,11 @@ class Computer:
 
     def run(self, loop: bool = False) -> None:
         while not self.terminated:
-            opcode, modes = self.split(self[self.pointer])
-            if opcode not in Computer.opcodes:
-                raise ValueError(f"Invalid opcode {opcode}")
+            op = self.mem[self.pointer]
+            opcode = op % 100
             method, arity = Computer.opcodes[opcode]
-            params: list[Parameter] = [self[i] for i in range(self.pointer+1, self.pointer+arity+1)]
+            modes = [(op // (10 ** (2 + i))) % 10 for i in range(arity)]
+            params: list[Parameter] = [self.mem[i] for i in range(self.pointer+1, self.pointer+arity+1)]
             arguments: list[Argument] = list(zip_longest(params, modes, fillvalue=0))
             execute = getattr(self, method)
             execute(*arguments)
@@ -61,6 +61,7 @@ class Computer:
     def get_address(self, argument: Argument) -> Address:
         # Parameters that an instruction writes to will never be in immediate mode.
         parameter, mode = argument
+        return parameter if mode == 0 else self.relative_base + parameter
         match mode:
             case 0:  # position mode
                 return parameter
@@ -71,42 +72,34 @@ class Computer:
 
     def get_value(self, argument: Argument) -> Value:
         parameter, mode = argument
+        return self.mem[parameter] if mode == 0 else parameter if mode == 1 else self.mem[self.relative_base + parameter]
         match mode:
             case 0:  # position mode
-                return self[parameter]
+                return self.mem[parameter]
             case 1:  # immediate mode
                 return parameter
             case 2:  # relative mode
-                return self[self.relative_base + parameter]
+                return self.mem[self.relative_base + parameter]
             case _:
                 raise ValueError(f"Invalid parameter mode {mode}.")
-
-    def split(self, value: Value) -> tuple[OpCode, list[ParameterMode]]:
-        if value <= 99:
-            return value, []
-        else:
-            val_str = str(value)
-            opcode = int(val_str[-2:])
-            modes = list(map(int, reversed(val_str[:-2])))
-            return opcode, modes
 
     def add_input(self, value: Value) -> None:
         self.input_values.append(value)
 
     def add(self, x: Argument, y: Argument, z: Argument) -> None:
-        self[self.get_address(z)] = self.get_value(x) + self.get_value(y)
+        self.mem[self.get_address(z)] = self.get_value(x) + self.get_value(y)
         self.pointer += 4
 
     def mul(self, x: Argument, y: Argument, z: Argument) -> None:
-        self[self.get_address(z)] = self.get_value(x) * self.get_value(y)
+        self.mem[self.get_address(z)] = self.get_value(x) * self.get_value(y)
         self.pointer += 4
 
     def input(self, z: Argument) -> None:
         if len(self.input_values) > 0:
-            self[self.get_address(z)] = self.input_values.pop(0)
+            self.mem[self.get_address(z)] = self.input_values.pop(0)
             self.pointer += 2
         elif self.input_default is not None:
-            self[self.get_address(z)] = self.input_default
+            self.mem[self.get_address(z)] = self.input_default
             self.pointer += 2
         else:
             raise ValueError("No value provided for input instruction")
@@ -138,18 +131,12 @@ class Computer:
         self.set_to_one(self.get_value(x) == self.get_value(y), self.get_address(z))
 
     def set_to_one(self, cond: bool, z: Address) -> None:
-        self[z] = 1 if cond else 0
+        self.mem[z] = 1 if cond else 0
         self.pointer += 4
 
     def relative_base_offset(self, x: Argument) -> None:
         self.relative_base += self.get_value(x)
         self.pointer += 2
-
-    def __getitem__(self, address: Address) -> Value:
-        return self.memory[address]
-
-    def __setitem__(self, address: Address, value: Value) -> None:
-        self.memory[address] = value
 
     def __str__(self) -> str:
         return ",".join(str(x) for x in self.output_values)
