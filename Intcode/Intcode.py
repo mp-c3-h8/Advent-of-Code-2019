@@ -1,45 +1,39 @@
-from itertools import zip_longest
-from collections import defaultdict
-from typing import Iterator
+from collections import deque
 
 type Program = list[int]
-type Memory = defaultdict[int, int]
+type Memory = list[int]
 
 type Value = int
 type Address = int
 type OpCode = int
 
-type Parameter = int
-type ParameterMode = int
-type Argument = tuple[Parameter, ParameterMode]
-
 
 class Computer:
     __slots__ = ["mem", "pointer", "relative_base", "terminated", "input_values", "output_values", "input_default"]
 
-    # opcode: method,arity
-    opcodes: dict[int, tuple[str, int]] = {
-        1: ("add", 3),
-        2: ("mul", 3),
-        3: ("input", 1),
-        4: ("output", 1),
-        5: ("jump_if_true", 2),
-        6: ("jump_if_false", 2),
-        7: ("less_than", 3),
-        8: ("equal", 3),
-        9: ("relative_base_offset", 1),
-        99: ("terminate", 0),
-    }
+    # opcode: arity
+    opcodes: list = [
+        0,  # 0 = dummy
+        3,  # 1 = add
+        3,  # 2 = mul
+        1,  # 3 = input
+        1,  # 4 = output
+        2,  # 5 = jump if true
+        2,  # 6 = jump if false
+        3,  # 7 = less than
+        3,  # 8 = equal
+        1,  # 9 = relative base offset
+    ]
 
     def __init__(self, program: Program, input_values: list[int]) -> None:
         self.load(program, input_values)
 
     def load(self, program: Program, input_values: list[int] = []) -> None:
-        self.mem = program[:] + [0]*1000
+        self.mem: Memory = program[:] + [0]*5000
         self.pointer: int = 0
         self.relative_base: int = 0
         self.terminated: bool = False
-        self.input_values: list[int] = input_values[:]
+        self.input_values: deque[int] = deque(input_values)
         self.input_default: int | None = None
         self.output_values: list[int] = []
 
@@ -47,96 +41,65 @@ class Computer:
         while not self.terminated:
             op = self.mem[self.pointer]
             opcode = op % 100
-            method, arity = Computer.opcodes[opcode]
-            modes = [(op // (10 ** (2 + i))) % 10 for i in range(arity)]
-            params: list[Parameter] = [self.mem[i] for i in range(self.pointer+1, self.pointer+arity+1)]
-            arguments: list[Argument] = list(zip_longest(params, modes, fillvalue=0))
-            execute = getattr(self, method)
-            execute(*arguments)
-            if opcode == 4 and loop:  # a bit hacky
+            if opcode == 99:
+                self.terminated = True
+                self.pointer += 1
                 return
+            arity = Computer.opcodes[opcode]
+            addrs, vals = self.process_code(op, arity)
+            if opcode == 1:  # add
+                self.mem[addrs[2]] = vals[0] + vals[1]
+                self.pointer += 4
+            elif opcode == 2:  # mul
+                self.mem[addrs[2]] = vals[0] * vals[1]
+                self.pointer += 4
+            elif opcode == 3:  # input
+                self.input(addrs[0])
+            elif opcode == 4:  # output
+                self.output_values.append(vals[0])
+                self.pointer += 2
+                if loop:  # a bit hacky
+                    return
+            elif opcode == 5:  # jump if true
+                self.pointer = vals[1] if vals[0] != 0 else self.pointer + 3
+            elif opcode == 6:  # jump if false
+                self.pointer = vals[1] if vals[0] == 0 else self.pointer + 3
+            elif opcode == 7:  # less than
+                self.mem[addrs[2]] = 1 if vals[0] < vals[1] else 0
+                self.pointer += 4
+            elif opcode == 8:  # equal
+                self.mem[addrs[2]] = 1 if vals[0] == vals[1] else 0
+                self.pointer += 4
+            elif opcode == 9:  # relative base offset
+                self.relative_base += vals[0]
+                self.pointer += 2
+            else:
+                raise ValueError(f"Opcode {opcode} unknown.")
 
-    # we cant have a "real pointer" for elements in our memory dict
-    # solution: split write and read operations into two functions: get_address and get_value
-    def get_address(self, argument: Argument) -> Address:
-        # Parameters that an instruction writes to will never be in immediate mode.
-        parameter, mode = argument
-        return parameter if mode == 0 else self.relative_base + parameter
-        match mode:
-            case 0:  # position mode
-                return parameter
-            case 2:  # relative mode
-                return self.relative_base + parameter
-            case _:
-                raise ValueError(f"Invalid parameter mode {mode}.")
-
-    def get_value(self, argument: Argument) -> Value:
-        parameter, mode = argument
-        return self.mem[parameter] if mode == 0 else parameter if mode == 1 else self.mem[self.relative_base + parameter]
-        match mode:
-            case 0:  # position mode
-                return self.mem[parameter]
-            case 1:  # immediate mode
-                return parameter
-            case 2:  # relative mode
-                return self.mem[self.relative_base + parameter]
-            case _:
-                raise ValueError(f"Invalid parameter mode {mode}.")
+    def process_code(self, op: int, arity: int) -> tuple[list[int], list[int]]:
+        addrs = []
+        vals = []
+        for i in range(arity):
+            mode = (op // (10 ** (2 + i))) % 10
+            param = self.mem[self.pointer+1+i]
+            addr = param if mode == 0 else self.relative_base + param
+            val = self.mem[param] if mode == 0 else param if mode == 1 else self.mem[self.relative_base + param]
+            addrs.append(addr)
+            vals.append(val)
+        return addrs, vals
 
     def add_input(self, value: Value) -> None:
         self.input_values.append(value)
 
-    def add(self, x: Argument, y: Argument, z: Argument) -> None:
-        self.mem[self.get_address(z)] = self.get_value(x) + self.get_value(y)
-        self.pointer += 4
-
-    def mul(self, x: Argument, y: Argument, z: Argument) -> None:
-        self.mem[self.get_address(z)] = self.get_value(x) * self.get_value(y)
-        self.pointer += 4
-
-    def input(self, z: Argument) -> None:
+    def input(self, z: Address) -> None:
         if len(self.input_values) > 0:
-            self.mem[self.get_address(z)] = self.input_values.pop(0)
+            self.mem[z] = self.input_values.popleft()
             self.pointer += 2
         elif self.input_default is not None:
-            self.mem[self.get_address(z)] = self.input_default
+            self.mem[z] = self.input_default
             self.pointer += 2
         else:
             raise ValueError("No value provided for input instruction")
-
-    def output(self, x: Argument) -> None:
-        self.output_values.append(self.get_value(x))
-        self.pointer += 2
-
-    def terminate(self) -> None:
-        self.terminated = True
-        self.pointer += 1
-
-    def jump_if_true(self, x: Argument, y: Argument) -> None:
-        self.jump(self.get_value(x) != 0, self.get_value(y))
-
-    def jump_if_false(self, x: Argument, y: Argument) -> None:
-        self.jump(self.get_value(x) == 0, self.get_value(y))
-
-    def jump(self, cond: bool, x: Value) -> None:
-        if cond:
-            self.pointer = x
-        else:
-            self.pointer += 3
-
-    def less_than(self, x: Argument, y: Argument, z: Argument) -> None:
-        self.set_to_one(self.get_value(x) < self.get_value(y), self.get_address(z))
-
-    def equal(self, x: Argument, y: Argument, z: Argument) -> None:
-        self.set_to_one(self.get_value(x) == self.get_value(y), self.get_address(z))
-
-    def set_to_one(self, cond: bool, z: Address) -> None:
-        self.mem[z] = 1 if cond else 0
-        self.pointer += 4
-
-    def relative_base_offset(self, x: Argument) -> None:
-        self.relative_base += self.get_value(x)
-        self.pointer += 2
 
     def __str__(self) -> str:
         return ",".join(str(x) for x in self.output_values)
@@ -146,7 +109,7 @@ class Computer:
 
     def __next__(self) -> int:
         self.run(True)
-        if not self.terminated:
+        if len(self.output_values) > 0:
             return self.output_values.pop()
         else:
             raise StopIteration

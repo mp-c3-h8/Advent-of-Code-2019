@@ -81,15 +81,6 @@ def part2(program: list[int], w: int) -> int:
         raise ValueError("Program error.")
 
 
-def print_grid(grid: Grid) -> None:
-    y_max, x_max = map(max, *grid)
-    y_min, x_min = map(min, *grid)
-    for y in range(y_min, y_max+1):
-        for x in range(x_min, x_max+1):
-            print(grid[y, x] if (y, x) in grid else " ", end="")
-        print()
-
-
 s = timer()
 
 
