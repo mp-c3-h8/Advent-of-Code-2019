@@ -3,7 +3,6 @@ import os
 from timeit import default_timer as timer
 import numpy as np
 from scipy.ndimage import convolve
-from itertools import product
 
 
 def conway(bugs: np.ndarray) -> int:
@@ -27,40 +26,39 @@ def conway(bugs: np.ndarray) -> int:
 
 
 def recursive_conway(bugs: np.ndarray) -> int:
-    A = bugs.reshape((1, 5, 5))
+    A = bugs.reshape((1, 5, 5)).astype(np.int8)
     A = np.pad(A, ((1, 1), (0, 0), (0, 0)))
+    kernel = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.int8)
 
     for k in range(200):
+        # alternate between adding an inner or outer grid
         pad = (0, 1) if k % 2 == 1 else (1, 0)
         A = np.pad(A, (pad, (0, 0), (0, 0)))
         new_A = A.copy()
-        neighbors = np.zeros_like(A)
 
-        for z, y, x in product(range(1, k+3), range(5), range(5)):
+        # outer and inner grid neighbors are treated as 0
+        neighbors = convolve(A, kernel, mode="constant", axes=(1, 2))
 
-            n = A[z-1, 1, 2] if y == 0 else A[z, y-1, x]
-            s = A[z-1, 3, 2] if y == 4 else A[z, y+1, x]
-            e = A[z-1, 2, 3] if x == 4 else A[z, y, x+1]
-            w = A[z-1, 2, 1] if x == 0 else A[z, y, x-1]
+        # skips outermost and innermost grid
+        for z in range(1, k+3):
+            # towards outer grid
+            neighbors[z, 0, :] += A[z-1, 1, 2]  # N
+            neighbors[z, 4, :] += A[z-1, 3, 2]  # S
+            neighbors[z, :, 4] += A[z-1, 2, 3]  # E
+            neighbors[z, :, 0] += A[z-1, 2, 1]  # W
 
-            neighbors[z, y, x] = n + s + w + e
-
-            # inner grid
-            if (y, x) == (1, 2):  # N - row 0
-                neighbors[z, y, x] += A[z+1, 0, :].sum()
-            elif (y, x) == (2, 3):  # E - column 4
-                neighbors[z, y, x] += A[z+1, :, 4].sum()
-            elif (y, x) == (3, 2):  # S - row 4
-                neighbors[z, y, x] += A[z+1, 4, :].sum()
-            elif (y, x) == (2, 1):  # W - column 0
-                neighbors[z, y, x] += A[z+1, :, 0].sum()
+            # towards inner grid (around (2,2))
+            neighbors[z, 1, 2] += A[z+1, 0, :].sum()  # N
+            neighbors[z, 2, 3] += A[z+1, :, 4].sum()  # E
+            neighbors[z, 3, 2] += A[z+1, 4, :].sum()  # S
+            neighbors[z, 2, 1] += A[z+1, :, 0].sum()  # W
 
         # conway rules
         new_A[(A == 1) & (neighbors != 1)] = 0
         new_A[(A == 0) & ((neighbors == 1) | (neighbors == 2))] = 1
-        A = new_A
 
         # set center to zero
+        A = new_A
         A[:, 2, 2] = 0
 
     return A.sum()
@@ -75,7 +73,7 @@ with open(input_path) as f:
 
 bugs = np.array([[1 if c == "#" else 0 for c in row] for row in data.splitlines()], dtype=int)
 print("Part 1:", conway(bugs.copy()))
-print("Part 2:", recursive_conway(bugs))
+print("Part 2:", recursive_conway(bugs.copy()))
 
 e = timer()
 print(f"time: {e-s}")
