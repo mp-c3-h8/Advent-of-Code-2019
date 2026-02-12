@@ -39,7 +39,7 @@ class Computer:
         self.input_default: int | None = None
         self.lan: list[Computer] | None = None
 
-    def run(self, loop: bool = False) -> None:
+    def run(self, loop: bool = False, stop_before_input: bool = False) -> None:
         temp: list[int] = []
         while not self.terminated:
             op = self.mem[self.pointer]
@@ -57,6 +57,8 @@ class Computer:
                 self.mem[addrs[2]] = vals[0] * vals[1]
                 self.pointer += 4
             elif opcode == 3:  # input
+                if stop_before_input:
+                    return
                 self.input(addrs[0])
             elif opcode == 4:  # output
                 if self.lan is not None:
