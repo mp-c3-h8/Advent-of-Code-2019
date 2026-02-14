@@ -10,7 +10,7 @@ type OpCode = int
 
 class Computer:
     __slots__ = ["mem", "pointer", "relative_base", "terminated",
-                 "input_values", "output_values", "input_default", "lan"]
+                 "input_values", "output_values", "input_default", "lan", "is_idle", "timeout"]
 
     # opcode: arity
     opcodes: list = [
@@ -26,22 +26,29 @@ class Computer:
         1,  # 9 = relative base offset
     ]
 
-    def __init__(self, program: Program, input_values: list[int]) -> None:
-        self.load(program, input_values)
+    def __init__(self, program: Program, input_values: list[int], timeout: int = -1) -> None:
+        self.load(program, input_values, timeout)
 
-    def load(self, program: Program, input_values: list[int]) -> None:
+    def load(self, program: Program, input_values: list[int], timeout: int = -1) -> None:
         self.mem: Memory = defaultdict(int, ((i, p) for i, p in enumerate(program)))
+        self.input_values: deque[int] = deque(input_values)
+        self.timeout = timeout
         self.pointer: int = 0
         self.relative_base: int = 0
         self.terminated: bool = False
-        self.input_values: deque[int] = deque(input_values)
         self.output_values: list[int] = []
         self.input_default: int | None = None
-        self.lan: list[Computer] | None = None
+        self.lan: dict[int, Computer] | None = None
+        self.is_idle: bool = False
 
-    def run(self, loop: bool = False, stop_before_input: bool = False) -> None:
+    def run(self, pause_after_output: bool = False, pause_before_input: bool = False) -> None:
         temp: list[int] = []
+        self.is_idle = False
+        idle_count = self.timeout
         while not self.terminated:
+            if idle_count == 0:
+                self.is_idle = True
+                return
             op = self.mem[self.pointer]
             opcode = op % 100
             if opcode == 99:
@@ -57,25 +64,21 @@ class Computer:
                 self.mem[addrs[2]] = vals[0] * vals[1]
                 self.pointer += 4
             elif opcode == 3:  # input
-                if stop_before_input:
+                if pause_before_input:
                     return
-                self.input(addrs[0])
+                idle_count -= self.input(addrs[0])  # function might decrease idle count
             elif opcode == 4:  # output
+                idle_count = self.timeout  # reset idle count
                 if self.lan is not None:
                     temp.append(vals[0])
                     if len(temp) == 3:
-                        print(temp)
-                        if temp[0] == 255:
-                            print(temp)
-                            for comp in self.lan:
-                                comp.terminated = True
                         self.lan[temp[0]].input_values.extend(temp[1:])
                         temp = []
                     self.pointer += 2
                 else:
                     self.output_values.append(vals[0])
                     self.pointer += 2
-                if loop:  # a bit hacky
+                if pause_after_output:  # a bit hacky
                     return
             elif opcode == 5:  # jump if true
                 self.pointer = vals[1] if vals[0] != 0 else self.pointer + 3
@@ -112,13 +115,15 @@ class Computer:
     def add_input(self, value: Value) -> None:
         self.input_values.append(value)
 
-    def input(self, z: Address) -> None:
+    def input(self, z: Address) -> bool:
         if len(self.input_values) > 0:
             self.mem[z] = self.input_values.popleft()
             self.pointer += 2
+            return False
         elif self.input_default is not None:
             self.mem[z] = self.input_default
             self.pointer += 2
+            return True
         else:
             raise ValueError("No value provided for input instruction")
 

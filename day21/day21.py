@@ -23,9 +23,10 @@ def solve(program: list[int], part2: bool = False) -> int:
         ]
     else:
         script = [
-            "NOT A T",
-            "NOT A J",
-            "NOT C T",
+            "NOT C J",
+            "AND D J",
+            "AND H J",
+            "NOT B T",
             "AND D T",
             "OR T J",
             "NOT A T",
@@ -41,8 +42,6 @@ def solve(program: list[int], part2: bool = False) -> int:
         computer.add_input(ord("\n"))
 
     computer.run()
-    # tt = "".join(chr(d) for d in computer.output_values)
-    # print(tt)
 
     return computer.output_values[-1]
 
@@ -56,6 +55,8 @@ with open(input_path) as f:
 
 program = list(map(int, data.split(",")))
 print("Part 1:", solve(program,False))
+print("Part 2:", solve(program,True))
+
 
 e = timer()
 print(f"time: {e-s}")

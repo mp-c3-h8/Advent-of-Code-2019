@@ -9,6 +9,7 @@ sys.path.append(os.path.join(dir_path, '..', 'Intcode'))
 from Intcode import Computer  # noqa
 
 
+# play the game :)
 def play_game(program: list[int]) -> None:
     computer = Computer(program, [])
 
